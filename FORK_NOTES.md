@@ -27,6 +27,10 @@ without touching the fetch/cache/sign/allowlist machinery.
 Nothing else changes: URL scheme, HMAC signing (`s` option), `allowHosts`, caching,
 metrics, and all existing formats behave exactly as upstream.
 
+## Deploying
+Full Windows + Linux deployment guide (build, service via NSSM/systemd, IIS/nginx/Caddy
+reverse proxy, caching, signing, troubleshooting): **[DEPLOY.md](DEPLOY.md)**.
+
 ## Build (single binary, any OS)
 ```bash
 go mod tidy
