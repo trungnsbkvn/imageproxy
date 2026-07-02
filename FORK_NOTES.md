@@ -15,6 +15,23 @@ resource-tight). Upstream is the right base — pure Go, single binary, mature c
 signing / host-allowlist — it just can't emit WebP/AVIF. This fork closes that one gap
 without touching the fetch/cache/sign/allowlist machinery.
 
+### Why not the maintainer's own WebP PR (#393)?
+willnorris opened [PR #393](https://github.com/willnorris/imageproxy/pull/393) (May
+2024) adding WebP output — but it's **still open/unmerged**, is **WebP-only (no AVIF)**,
+and encodes via **`go-libwebp`, which needs cgo + the C libwebp library**. That
+reintroduces exactly what we forked to avoid: a C toolchain to build, libwebp present at
+runtime, and hard cross-compilation — i.e. no "one `.exe`, no dependencies" on the
+Windows box. The PR also has acknowledged quality/size bugs (inverted `q`, "lossless"
+~4× larger) that kept it from merging.
+
+Our approach instead uses `gen2brain/webp` + `gen2brain/avif`, which compile libwebp and
+libaom **to WASM** (run by wazero) — so it stays `CGO_ENABLED=0`, ships one static
+binary, adds **AVIF** too, and is built + runtime-verified. Trade-off: WASM encode is
+slower than native cgo libwebp, mitigated by the disk cache (encode once) and
+pre-downsized originals. For a Docker-less, resource-tight Windows host that also wants
+AVIF, pure-Go wins; native libwebp/libvips (or imgproxy) would only pull ahead on a big
+Linux box optimizing purely for encode throughput.
+
 ## The delta (all pure-Go, `CGO_ENABLED=0`)
 
 | File | Change |
