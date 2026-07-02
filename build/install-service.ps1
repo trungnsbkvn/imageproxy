@@ -27,7 +27,7 @@ $ServiceName  = 'imageproxy'
 $Addr         = '127.0.0.1:8080'                       # loopback: only IIS reaches it
 $AllowHosts   = 'luatsumienbac.vn'                     # lock the source origin
 $BaseURL      = 'https://luatsumienbac.vn/media/'      # readable URLs: /img/880x,avif/<file> resolves here
-$CacheDir     = 'D:/Webs/2. Youth & Partners/media/luatsumienbac/_imgcache'  # real media root (spaces + & - svcArgs array quotes it)
+$CacheDir     = 'D:/imgcache/luatsumienbac'            # NO spaces: nssm AppParameters stores args unquoted, so a spaced path truncates -cache and drops every flag after it (incl. -baseURL). Cache is scratch; any writable no-space path works.
 $Timeout      = '20s'
 $SignatureKey = ''                                     # '' = unsigned (allowHosts still protects)
 # ----------------------------------------------------------------------------
@@ -43,10 +43,21 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) { throw "Run this in an ELEVATED PowerShell (Administrator)." }
 
 $logPath = Join-Path $here 'imageproxy.log'
-# Runtime flags as an ARRAY - PowerShell quotes each element, so spaces/& in paths are safe.
+# Runtime flags as an ARRAY. NOTE: nssm stores AppParameters UNQUOTED, so any value
+# containing a space truncates that flag and Go's flag parser drops EVERY flag after
+# it (this silently killed -baseURL once). Keep all values space-free; asserted below.
 $svcArgs = @('-addr', $Addr, '-allowHosts', $AllowHosts, '-cache', $CacheDir, '-timeout', $Timeout, '-logFile', $logPath)
 if ($BaseURL      -ne '') { $svcArgs += @('-baseURL', $BaseURL) }
 if ($SignatureKey -ne '') { $svcArgs += @('-signatureKey', $SignatureKey) }
+
+if ($Method -eq 'nssm') {
+  $spaced = $svcArgs | Where-Object { $_ -match '\s' }
+  if ($spaced) {
+    throw ("nssm cannot store arguments containing spaces (they get truncated, dropping " +
+           "every flag after them). Use space-free values (e.g. `$CacheDir = 'D:/imgcache/luatsumienbac' " +
+           "and install this script under a path without spaces). Offending: " + ($spaced -join ' | '))
+  }
+}
 
 # Remove any existing service first (works no matter how it was installed).
 if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
