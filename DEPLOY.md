@@ -147,9 +147,10 @@ runtime:
 *Configure by hand* (what `install-service.ps1 -Method nssm` does for you):
 ```powershell
 $exe = "C:\svc\imageproxy\imageproxy.exe"
-nssm install imageproxy $exe
+# Pass the flags right after the program — nssm stores them as AppParameters, quoting
+# spaced paths itself (more robust than `set AppParameters "...escaped quotes..."`):
+nssm install imageproxy $exe -addr 127.0.0.1:8080 -allowHosts luatsumienbac.vn -cache "D:/media/luatsumienbac/_imgcache" -timeout 20s -logFile "C:\svc\imageproxy\imageproxy.log"
 nssm set imageproxy AppDirectory "C:\svc\imageproxy"
-nssm set imageproxy AppParameters "-addr 127.0.0.1:8080 -allowHosts luatsumienbac.vn -cache `"D:/media/luatsumienbac/_imgcache`" -timeout 20s -logFile `"C:\svc\imageproxy\imageproxy.log`""
 nssm set imageproxy AppExit Default Restart          # restart if the process exits
 nssm set imageproxy Start SERVICE_AUTO_START         # start at boot
 nssm set imageproxy AppStderr "C:\svc\imageproxy\err.log"   # crash backstop (normal logs -> -logFile)
@@ -332,6 +333,8 @@ To rebase the fork on a newer upstream, re-apply the small delta in
 | 504 / cut-off on huge images | 30 s write timeout hit by a very large AVIF encode. Keep originals ≤ ~1600 px (the CMS already downsizes uploads). |
 | Won't start: `listen failed` | Port already in use. Change `-addr` or free `:8080`. |
 | `-service install` fails / access denied | Must run in an **elevated** (Administrator) PowerShell. |
+| `install-service.ps1` aborts with `Can't open service!` / `NativeCommandError` | Old copy of the script on PowerShell 7.4+ (a harmless first-run "stop non-existent service" was treated as fatal). Pull the current script (it sets `$PSNativeCommandUseErrorActionPreference = $false`). |
+| Service path has spaces / `&` (e.g. `…\Youth & Partners\…`) | Handled, but a space-free path like `C:\svc\imageproxy` is safest. The scripts pass args as an array so quoting is correct either way. |
 | Service installed but keeps stopping | Check the `-logFile` and the Windows Event Log. Common causes: cache dir parent missing or not writable by LocalSystem, or `listen failed` (port in use). |
 
 Enable `-verbose` during bring-up to log every fetch/transform and the served-from-cache

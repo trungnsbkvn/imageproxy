@@ -5,6 +5,9 @@
   clears any nssm parameters under it. Run from an ELEVATED PowerShell.
 #>
 $ErrorActionPreference = 'Stop'
+# PS 7.4+ throws on a native non-zero exit under 'Stop'; sc.exe stop on an already-stopped
+# service exits non-zero, which is fine here. Opt out (harmless on PS 5.1).
+$PSNativeCommandUseErrorActionPreference = $false
 $ServiceName = 'imageproxy'
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()

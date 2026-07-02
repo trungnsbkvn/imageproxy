@@ -3,6 +3,9 @@
   Pure Go, no cgo. Requires Go 1.25.8+ on PATH. Run from the repo root.
 #>
 $ErrorActionPreference = 'Stop'
+# Let explicit $LASTEXITCODE checks govern native (go) failures instead of PS 7.4+
+# auto-throwing on any non-zero exit. Harmless on PS 5.1.
+$PSNativeCommandUseErrorActionPreference = $false
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
 

@@ -3,10 +3,12 @@
 
     .\install-service.ps1                 # NATIVE (default): the binary self-registers
                                           #   with the SCM via `-service install` (no deps)
-    .\install-service.ps1 -Method nssm    # via NSSM (requires nssm.exe on PATH)
+    .\install-service.ps1 -Method nssm    # via NSSM (nssm.exe on PATH, or pass -NssmPath)
+    .\install-service.ps1 -Method nssm -NssmPath 'C:\tools\nssm\nssm.exe'
 
   Run from an ELEVATED PowerShell in this folder, after editing the CONFIG block.
   Compatible with Windows PowerShell 5.1 and PowerShell 7+.
+  Tip: a service path WITHOUT spaces (e.g. C:\svc\imageproxy) avoids all quoting edge cases.
 #>
 param(
   [ValidateSet('native', 'nssm')]
@@ -15,6 +17,10 @@ param(
   [string]$NssmPath = ''
 )
 $ErrorActionPreference = 'Stop'
+# In PowerShell 7.4+ a native command's non-zero exit throws under 'Stop'. Several calls
+# below are expected to "fail" harmlessly (e.g. stopping a not-yet-installed service), so
+# opt out and check $LASTEXITCODE explicitly where it matters. Harmless on PS 5.1.
+$PSNativeCommandUseErrorActionPreference = $false
 
 # ── CONFIG (edit these) ─────────────────────────────────────────────────────
 $ServiceName  = 'imageproxy'
@@ -36,9 +42,18 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) { throw "Run this in an ELEVATED PowerShell (Administrator)." }
 
 $logPath = Join-Path $here 'imageproxy.log'
-# Runtime flags shared by both methods (as an array — handles spaces in paths).
+# Runtime flags as an ARRAY — PowerShell quotes each element, so spaces/& in paths are safe.
 $svcArgs = @('-addr', $Addr, '-allowHosts', $AllowHosts, '-cache', $CacheDir, '-timeout', $Timeout, '-logFile', $logPath)
 if ($SignatureKey -ne '') { $svcArgs += @('-signatureKey', $SignatureKey) }
+
+# Remove any existing service first (works no matter how it was installed).
+if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
+  Write-Host "Removing existing '$ServiceName' service ..."
+  & sc.exe stop   $ServiceName 2>$null | Out-Null
+  Start-Sleep -Milliseconds 600
+  & sc.exe delete $ServiceName 2>$null | Out-Null
+  Start-Sleep -Milliseconds 600
+}
 
 if ($Method -eq 'nssm') {
   if ($NssmPath -ne '') {
@@ -53,41 +68,38 @@ if ($Method -eq 'nssm') {
     $nssm = $nssmCmd.Source
   }
 
-  # Quote paths so spaces in $CacheDir/$logPath survive as a single AppParameters string.
-  $nssmParams = "-addr $Addr -allowHosts $AllowHosts -cache `"$CacheDir`" -timeout $Timeout -logFile `"$logPath`""
-  if ($SignatureKey -ne '') { $nssmParams += " -signatureKey $SignatureKey" }
-
-  & $nssm stop   $ServiceName 2>$null | Out-Null
-  & $nssm remove $ServiceName confirm 2>$null | Out-Null
-
   Write-Host "Installing service '$ServiceName' via NSSM ..."
-  & $nssm install $ServiceName $exe
-  & $nssm set $ServiceName AppDirectory $here
-  & $nssm set $ServiceName AppParameters $nssmParams
-  & $nssm set $ServiceName AppStderr (Join-Path $here 'err.log')   # crash backstop; normal logs go to imageproxy.log
-  & $nssm set $ServiceName AppExit Default Restart
-  & $nssm set $ServiceName Start SERVICE_AUTO_START
-  & $nssm start $ServiceName
-  & $nssm status $ServiceName
+  # `install <name> <program> <args...>` — PS quotes each array element; nssm stores them
+  # as AppParameters with correct quoting (handles the spaced/& path).
+  & $nssm install $ServiceName $exe @svcArgs
+  if ($LASTEXITCODE -ne 0) { throw "nssm install failed ($LASTEXITCODE)." }
+  & $nssm set $ServiceName AppDirectory $here                     | Out-Null
+  & $nssm set $ServiceName AppStderr (Join-Path $here 'err.log')  | Out-Null   # crash backstop; normal logs -> -logFile
+  & $nssm set $ServiceName AppExit Default Restart               | Out-Null
+  & $nssm set $ServiceName Start SERVICE_AUTO_START              | Out-Null
+  & $nssm start $ServiceName | Out-Null
 }
 else {
-  # NATIVE: the binary registers itself with the Windows SCM (no nssm).
-  & $exe -service stop      2>$null | Out-Null
-  & $exe -service uninstall 2>$null | Out-Null
-
   Write-Host "Installing service '$ServiceName' (native SCM, no nssm) ..."
   & $exe -service install @svcArgs
   if ($LASTEXITCODE -ne 0) { throw "install failed ($LASTEXITCODE)." }
-
   # Native crash recovery + auto-start via built-in sc.exe.
   & sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/5000/restart/5000 | Out-Null
   & sc.exe config  $ServiceName start= auto | Out-Null
   & $exe -service start
 }
 
+# Confirm it came up.
+Start-Sleep -Seconds 1
+$svc = Get-Service $ServiceName -ErrorAction SilentlyContinue
+if (-not $svc) { throw "Service '$ServiceName' was not created — see output above." }
+if ($svc.Status -ne 'Running') {
+  Write-Warning "Service '$ServiceName' is '$($svc.Status)', not Running. Check logs: $logPath (and Event Viewer)."
+}
+
 Write-Host ""
-Write-Host "Installed + started '$ServiceName' via '$Method' — a real Windows service (services.msc)."
-Write-Host "  Status : sc.exe query $ServiceName"
+Write-Host "Installed '$ServiceName' via '$Method' — a real Windows service (services.msc). Status: $($svc.Status)"
+Write-Host "  Query  : sc.exe query $ServiceName"
 Write-Host "  Logs   : $logPath"
 Write-Host "  Test   : curl.exe http://$Addr/health-check   # -> OK"
 Write-Host "Uninstall (either method): .\uninstall-service.ps1"
