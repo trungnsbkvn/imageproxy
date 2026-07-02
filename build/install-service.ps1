@@ -10,7 +10,9 @@
 #>
 param(
   [ValidateSet('native', 'nssm')]
-  [string]$Method = 'native'
+  [string]$Method = 'native',
+  # Full path to nssm.exe (only for -Method nssm). If omitted, nssm must be on PATH.
+  [string]$NssmPath = ''
 )
 $ErrorActionPreference = 'Stop'
 
@@ -39,11 +41,17 @@ $svcArgs = @('-addr', $Addr, '-allowHosts', $AllowHosts, '-cache', $CacheDir, '-
 if ($SignatureKey -ne '') { $svcArgs += @('-signatureKey', $SignatureKey) }
 
 if ($Method -eq 'nssm') {
-  $nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
-  if (-not $nssmCmd) {
-    throw "nssm not found on PATH. Install it (nssm.cc / choco install nssm / scoop install nssm), or omit -Method to use the native method."
+  if ($NssmPath -ne '') {
+    if (-not (Test-Path $NssmPath)) { throw "NssmPath not found: $NssmPath" }
+    $nssm = (Resolve-Path $NssmPath).Path
   }
-  $nssm = $nssmCmd.Source
+  else {
+    $nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
+    if (-not $nssmCmd) {
+      throw "nssm not found on PATH. Pass -NssmPath 'C:\tools\nssm\nssm.exe', install it (choco/scoop), or omit -Method for the native install."
+    }
+    $nssm = $nssmCmd.Source
+  }
 
   # Quote paths so spaces in $CacheDir/$logPath survive as a single AppParameters string.
   $nssmParams = "-addr $Addr -allowHosts $AllowHosts -cache `"$CacheDir`" -timeout $Timeout -logFile `"$logPath`""

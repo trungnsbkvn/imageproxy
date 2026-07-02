@@ -131,17 +131,35 @@ sc.exe query imageproxy          # or services.msc
 Manage it with `imageproxy.exe -service stop|start|restart|uninstall` (or the usual
 `sc.exe` / `services.msc`).
 
-**NSSM** (alternative) — if you have `nssm.exe` on PATH:
+**NSSM** (alternative).
+
+*Get nssm onto the server* — it's a single standalone binary, nothing to install, no
+runtime:
+- **Chocolatey:** `choco install nssm`  ·  **Scoop:** `scoop install nssm` (both add it to PATH)
+- **Manual:** download `nssm-2.24.zip` from <https://nssm.cc/download> (or a mirror), unzip,
+  take **`win64\nssm.exe`**. Then either add its folder to PATH, or skip PATH entirely and
+  point the installer at it:
+  ```powershell
+  .\install-service.ps1 -Method nssm -NssmPath 'C:\tools\nssm\nssm.exe'
+  ```
+  Verify with `nssm version`.
+
+*Configure by hand* (what `install-service.ps1 -Method nssm` does for you):
 ```powershell
 $exe = "C:\svc\imageproxy\imageproxy.exe"
 nssm install imageproxy $exe
 nssm set imageproxy AppDirectory "C:\svc\imageproxy"
 nssm set imageproxy AppParameters "-addr 127.0.0.1:8080 -allowHosts luatsumienbac.vn -cache `"D:/media/luatsumienbac/_imgcache`" -timeout 20s -logFile `"C:\svc\imageproxy\imageproxy.log`""
-nssm set imageproxy AppExit Default Restart
-nssm set imageproxy Start SERVICE_AUTO_START
+nssm set imageproxy AppExit Default Restart          # restart if the process exits
+nssm set imageproxy Start SERVICE_AUTO_START         # start at boot
+nssm set imageproxy AppStderr "C:\svc\imageproxy\err.log"   # crash backstop (normal logs -> -logFile)
 nssm start imageproxy
 ```
-Either way, remove it with `build\uninstall-service.ps1` (or `sc.exe delete imageproxy`,
+`nssm edit imageproxy` opens a GUI for these; `nssm restart imageproxy` after changes. On
+stop, nssm sends the process Ctrl+C first, so imageproxy shuts down gracefully. Runs as
+LocalSystem unless you set `nssm set imageproxy ObjectName <user> <password>`.
+
+Either method: remove with `build\uninstall-service.ps1` (or `sc.exe delete imageproxy`,
 which works for both). The two methods are interchangeable — don't run both at once.
 
 > **Logs:** a service's stdout is discarded by Windows, so pass `-logFile` (both methods)
