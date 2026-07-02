@@ -1,5 +1,5 @@
 <#
-  uninstall-service.ps1 — stop and remove the imageproxy Windows service.
+  uninstall-service.ps1 - stop and remove the imageproxy Windows service.
   Works for BOTH install methods (native self-register and nssm): sc.exe removes a
   service by name regardless of how it was created, and deleting the service key also
   clears any nssm parameters under it. Run from an ELEVATED PowerShell.
@@ -15,7 +15,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) { throw "Run this in an ELEVATED PowerShell (Administrator)." }
 
 if (-not (Get-Service $ServiceName -ErrorAction SilentlyContinue)) {
-  Write-Host "Service '$ServiceName' not found — nothing to do."
+  Write-Host "Service '$ServiceName' not found - nothing to do."
   return
 }
 

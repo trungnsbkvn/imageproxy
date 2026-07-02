@@ -1,5 +1,5 @@
 <#
-  run.ps1 — run imageproxy in the FOREGROUND for testing (Ctrl+C to stop).
+  run.ps1 - run imageproxy in the FOREGROUND for testing (Ctrl+C to stop).
   Same config as the service; edit to taste. For production use install-service.ps1.
 #>
 $ErrorActionPreference = 'Stop'

@@ -1,5 +1,5 @@
 <#
-  build.ps1 — build the Windows imageproxy binary into build\imageproxy.exe.
+  build.ps1 - build the Windows imageproxy binary into build\imageproxy.exe.
   Pure Go, no cgo. Requires Go 1.25.8+ on PATH. Run from the repo root.
 #>
 $ErrorActionPreference = 'Stop'

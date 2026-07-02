@@ -1,5 +1,5 @@
 <#
-  install-service.ps1 — install imageproxy as a Windows service. Two methods:
+  install-service.ps1 - install imageproxy as a Windows service. Two methods:
 
     .\install-service.ps1                 # NATIVE (default): the binary self-registers
                                           #   with the SCM via `-service install` (no deps)
@@ -22,15 +22,15 @@ $ErrorActionPreference = 'Stop'
 # opt out and check $LASTEXITCODE explicitly where it matters. Harmless on PS 5.1.
 $PSNativeCommandUseErrorActionPreference = $false
 
-# ── CONFIG (edit these) ─────────────────────────────────────────────────────
+# -- CONFIG (edit these) -----------------------------------------------------
 $ServiceName  = 'imageproxy'
 $Addr         = '127.0.0.1:8080'                       # loopback: only IIS reaches it
 $AllowHosts   = 'luatsumienbac.vn'                     # lock the source origin
 $BaseURL      = 'https://luatsumienbac.vn/media/'      # readable URLs: /img/880x,avif/<file> resolves here
-$CacheDir     = 'D:/Webs/2. Youth & Partners/media/luatsumienbac/_imgcache'  # real media root (spaces + & — svcArgs array quotes it)
+$CacheDir     = 'D:/Webs/2. Youth & Partners/media/luatsumienbac/_imgcache'  # real media root (spaces + & - svcArgs array quotes it)
 $Timeout      = '20s'
 $SignatureKey = ''                                     # '' = unsigned (allowHosts still protects)
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe  = Join-Path $here 'imageproxy.exe'
@@ -43,7 +43,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) { throw "Run this in an ELEVATED PowerShell (Administrator)." }
 
 $logPath = Join-Path $here 'imageproxy.log'
-# Runtime flags as an ARRAY — PowerShell quotes each element, so spaces/& in paths are safe.
+# Runtime flags as an ARRAY - PowerShell quotes each element, so spaces/& in paths are safe.
 $svcArgs = @('-addr', $Addr, '-allowHosts', $AllowHosts, '-cache', $CacheDir, '-timeout', $Timeout, '-logFile', $logPath)
 if ($BaseURL      -ne '') { $svcArgs += @('-baseURL', $BaseURL) }
 if ($SignatureKey -ne '') { $svcArgs += @('-signatureKey', $SignatureKey) }
@@ -71,7 +71,7 @@ if ($Method -eq 'nssm') {
   }
 
   Write-Host "Installing service '$ServiceName' via NSSM ..."
-  # `install <name> <program> <args...>` — PS quotes each array element; nssm stores them
+  # `install <name> <program> <args...>` - PS quotes each array element; nssm stores them
   # as AppParameters with correct quoting (handles the spaced/& path).
   & $nssm install $ServiceName $exe @svcArgs
   if ($LASTEXITCODE -ne 0) { throw "nssm install failed ($LASTEXITCODE)." }
@@ -94,13 +94,13 @@ else {
 # Confirm it came up.
 Start-Sleep -Seconds 1
 $svc = Get-Service $ServiceName -ErrorAction SilentlyContinue
-if (-not $svc) { throw "Service '$ServiceName' was not created — see output above." }
+if (-not $svc) { throw "Service '$ServiceName' was not created - see output above." }
 if ($svc.Status -ne 'Running') {
   Write-Warning "Service '$ServiceName' is '$($svc.Status)', not Running. Check logs: $logPath (and Event Viewer)."
 }
 
 Write-Host ""
-Write-Host "Installed '$ServiceName' via '$Method' — a real Windows service (services.msc). Status: $($svc.Status)"
+Write-Host "Installed '$ServiceName' via '$Method' - a real Windows service (services.msc). Status: $($svc.Status)"
 Write-Host "  Query  : sc.exe query $ServiceName"
 Write-Host "  Logs   : $logPath"
 Write-Host "  Test   : curl.exe http://$Addr/health-check   # -> OK"
