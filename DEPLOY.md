@@ -101,10 +101,14 @@ Endpoints: `GET /health-check` → `OK`; `GET /metrics` → Prometheus.
 
 ## 4. Run as a service
 
-### 4a. Windows — native service (no nssm)
-The binary registers **itself** with the Windows Service Control Manager — no NSSM or
-other wrapper. Put it somewhere stable, e.g. `C:\svc\imageproxy\`, and from an
-**elevated** PowerShell:
+### 4a. Windows — as a service (native by default, or nssm)
+Two methods, both giving a real service in `services.msc`. **Native** is the default and
+needs no third-party tool; **nssm** is available if you prefer it. The bundled
+`build\install-service.ps1` does either from a CONFIG block (`-Method nssm` for the
+latter) — prefer it over the raw commands below.
+
+**Native** — the binary registers **itself** with the Service Control Manager. Put it
+somewhere stable, e.g. `C:\svc\imageproxy\`, and from an **elevated** PowerShell:
 
 ```powershell
 $exe = "C:\svc\imageproxy\imageproxy.exe"
@@ -125,11 +129,23 @@ sc.exe config  imageproxy start= auto
 sc.exe query imageproxy          # or services.msc
 ```
 Manage it with `imageproxy.exe -service stop|start|restart|uninstall` (or the usual
-`sc.exe` / `services.msc`). The bundled **`build\install-service.ps1`** does all of the
-above from a CONFIG block — prefer it.
+`sc.exe` / `services.msc`).
 
-> **Logs:** a service's stdout is discarded by Windows, so pass `-logFile` (as above) to
-> capture startup + errors. Start/stop/failure are also written to the Windows Event Log.
+**NSSM** (alternative) — if you have `nssm.exe` on PATH:
+```powershell
+$exe = "C:\svc\imageproxy\imageproxy.exe"
+nssm install imageproxy $exe
+nssm set imageproxy AppDirectory "C:\svc\imageproxy"
+nssm set imageproxy AppParameters "-addr 127.0.0.1:8080 -allowHosts luatsumienbac.vn -cache `"D:/media/luatsumienbac/_imgcache`" -timeout 20s -logFile `"C:\svc\imageproxy\imageproxy.log`""
+nssm set imageproxy AppExit Default Restart
+nssm set imageproxy Start SERVICE_AUTO_START
+nssm start imageproxy
+```
+Either way, remove it with `build\uninstall-service.ps1` (or `sc.exe delete imageproxy`,
+which works for both). The two methods are interchangeable — don't run both at once.
+
+> **Logs:** a service's stdout is discarded by Windows, so pass `-logFile` (both methods)
+> to capture startup + errors. Start/stop/failure are also in the Windows Event Log.
 
 > **Cache path on Windows:** both `D:/media/.../_imgcache` and `D:\media\...\_imgcache`
 > are accepted (verified). Forward slashes are slightly safer (the value passes through

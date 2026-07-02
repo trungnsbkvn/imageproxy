@@ -8,23 +8,25 @@ Copy this folder to the server (e.g. `C:\svc\imageproxy\`) and follow the checkl
 | File | Purpose |
 |------|---------|
 | `imageproxy.exe` | the resizer binary (built by `..\build.ps1`; not in git) |
-| `install-service.ps1` | install as a **native** Windows service (**no nssm**; edit CONFIG first) |
-| `uninstall-service.ps1` | stop + remove the service |
+| `install-service.ps1` | install as a Windows service — **native** (default) or **`-Method nssm`**; edit CONFIG first |
+| `uninstall-service.ps1` | stop + remove the service (works for either method) |
 | `run.ps1` | run in the foreground for testing |
 | `config.example.env` | env-var alternative to CLI flags |
 
-> **No nssm required.** The binary registers itself with the Windows Service Control
-> Manager via `imageproxy.exe -service install`, so it's a real service in `services.msc`
-> with no third-party wrapper.
+> **Two install methods, one script.** Default is **native** — the binary self-registers
+> with the Windows SCM (no third-party tool). If you have `nssm.exe`, run
+> `install-service.ps1 -Method nssm` instead. Both produce a real service in
+> `services.msc`; `uninstall-service.ps1` removes either.
 
 ## Deploy checklist (Windows)
 1. **Build** the exe (on a machine with Go): from the repo root run `.\build.ps1`
    → produces `build\imageproxy.exe`.
 2. **Copy** this `build\` folder to the server, e.g. `C:\svc\imageproxy\`.
 3. **Edit** `install-service.ps1` → the CONFIG block (cache dir, allowHosts, port, optional key).
-4. **Install** (elevated PowerShell):
-   `powershell -ExecutionPolicy Bypass -File .\install-service.ps1`
-   → registers + starts the service, sets auto-start + crash-restart via `sc.exe`.
+4. **Install** (elevated PowerShell) — pick one:
+   - native (default): `powershell -ExecutionPolicy Bypass -File .\install-service.ps1`
+   - nssm: `powershell -ExecutionPolicy Bypass -File .\install-service.ps1 -Method nssm`
+   → registers + starts the service with auto-start + crash-restart.
 5. **Smoke test:** `curl.exe http://127.0.0.1:8080/health-check` → `OK`  (logs: `imageproxy.log`)
 6. **IIS:** add the reverse-proxy rule (needs URL Rewrite + ARR, proxy enabled):
    ```xml
