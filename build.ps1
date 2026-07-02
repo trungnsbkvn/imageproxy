@@ -20,8 +20,15 @@ go build -ldflags "-s -w" -o build/imageproxy.exe ./cmd/imageproxy
 if ($LASTEXITCODE -ne 0) { throw "go build failed ($LASTEXITCODE)." }
 
 Write-Host "Built build\imageproxy.exe"
-& (Join-Path $here 'build\imageproxy.exe') -addr 127.0.0.1:8099 &
-Start-Sleep -Milliseconds 800
-try { $ok = (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8099/health-check).Content } catch { $ok = "(smoke test skipped)" }
-Get-Process imageproxy -ErrorAction SilentlyContinue | Stop-Process -Force
-Write-Host "Health check: $ok"
+
+# Smoke test: start the fresh binary, poll /health-check, then stop that exact process.
+$exe  = Join-Path $here 'build\imageproxy.exe'
+$proc = Start-Process -FilePath $exe -ArgumentList '-addr', '127.0.0.1:8099' -PassThru -WindowStyle Hidden
+$ok = $null
+foreach ($i in 1..20) {
+  Start-Sleep -Milliseconds 300
+  try { $ok = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 'http://127.0.0.1:8099/health-check').Content; break } catch { }
+}
+if ($proc -and -not $proc.HasExited) { $proc | Stop-Process -Force }
+if ($ok -eq 'OK') { Write-Host "Smoke test: health-check -> OK" }
+else { Write-Warning "Smoke test did not confirm health-check (binary built OK regardless)." }
