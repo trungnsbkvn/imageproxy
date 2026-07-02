@@ -26,7 +26,8 @@ $PSNativeCommandUseErrorActionPreference = $false
 $ServiceName  = 'imageproxy'
 $Addr         = '127.0.0.1:8080'                       # loopback: only IIS reaches it
 $AllowHosts   = 'luatsumienbac.vn'                     # lock the source origin
-$CacheDir     = 'D:/media/luatsumienbac/_imgcache'     # forward slashes are safest
+$BaseURL      = 'https://luatsumienbac.vn/media/'      # readable URLs: /img/880x,avif/<file> resolves here
+$CacheDir     = 'D:/Webs/2. Youth & Partners/media/luatsumienbac/_imgcache'  # real media root (spaces + & — svcArgs array quotes it)
 $Timeout      = '20s'
 $SignatureKey = ''                                     # '' = unsigned (allowHosts still protects)
 # ────────────────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ if (-not $isAdmin) { throw "Run this in an ELEVATED PowerShell (Administrator)."
 $logPath = Join-Path $here 'imageproxy.log'
 # Runtime flags as an ARRAY — PowerShell quotes each element, so spaces/& in paths are safe.
 $svcArgs = @('-addr', $Addr, '-allowHosts', $AllowHosts, '-cache', $CacheDir, '-timeout', $Timeout, '-logFile', $logPath)
+if ($BaseURL      -ne '') { $svcArgs += @('-baseURL', $BaseURL) }
 if ($SignatureKey -ne '') { $svcArgs += @('-signatureKey', $SignatureKey) }
 
 # Remove any existing service first (works no matter how it was installed).

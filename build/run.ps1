@@ -9,6 +9,7 @@ if (-not (Test-Path $exe)) { throw "imageproxy.exe not found. Build it first (..
 
 & $exe -addr 127.0.0.1:8080 `
        -allowHosts luatsumienbac.vn `
-       -cache D:/media/luatsumienbac/_imgcache `
+       -baseURL https://luatsumienbac.vn/media/ `
+       -cache 'D:/Webs/2. Youth & Partners/media/luatsumienbac/_imgcache' `
        -timeout 20s `
        -verbose
