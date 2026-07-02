@@ -88,6 +88,8 @@ the flag name upper-cased (via `envy`). Env vars are convenient for services.
 | `-timeout` | `IMAGEPROXY_TIMEOUT` | `20s` | per-request limit. `0` = none. |
 | `-verbose` | `IMAGEPROXY_VERBOSE` | `false` in prod | debug logging (useful during first bring-up). |
 | `-scaleUp` | `IMAGEPROXY_SCALEUP` | `false` | never upscale past the original. Keep false. |
+| `-service` | — | *(control)* | fork addition: `install`/`uninstall`/`start`/`stop`/`restart` the OS service, then exit. |
+| `-logFile` | `IMAGEPROXY_LOGFILE` | a file path | fork addition: append logs to a file (a service's stdout is discarded — set this). |
 
 Endpoints: `GET /health-check` → `OK`; `GET /metrics` → Prometheus.
 
@@ -99,37 +101,49 @@ Endpoints: `GET /health-check` → `OK`; `GET /metrics` → Prometheus.
 
 ## 4. Run as a service
 
-### 4a. Windows — via [NSSM](https://nssm.cc/)
-A console app isn't a native Windows service, so wrap it with NSSM (Non-Sucking
-Service Manager). Put the binary somewhere stable, e.g. `C:\svc\imageproxy\`.
+### 4a. Windows — native service (no nssm)
+The binary registers **itself** with the Windows Service Control Manager — no NSSM or
+other wrapper. Put it somewhere stable, e.g. `C:\svc\imageproxy\`, and from an
+**elevated** PowerShell:
 
 ```powershell
-# Install
-nssm install imageproxy "C:\svc\imageproxy\imageproxy.exe"
-nssm set imageproxy AppDirectory "C:\svc\imageproxy"
+$exe = "C:\svc\imageproxy\imageproxy.exe"
 
-# Arguments (or use AppEnvironmentExtra with IMAGEPROXY_* instead)
-nssm set imageproxy AppParameters "-addr 127.0.0.1:8080 -allowHosts luatsumienbac.vn -cache C:/media/luatsumienbac/_imgcache -timeout 20s"
+# Install: everything after `-service install` becomes the service's command line.
+& $exe -service install `
+    -addr 127.0.0.1:8080 `
+    -allowHosts luatsumienbac.vn `
+    -cache D:/media/luatsumienbac/_imgcache `
+    -timeout 20s `
+    -logFile C:\svc\imageproxy\imageproxy.log
 
-# Recommended: restart on crash, log to files
-nssm set imageproxy AppStdout "C:\svc\imageproxy\out.log"
-nssm set imageproxy AppStderr "C:\svc\imageproxy\err.log"
-nssm set imageproxy AppExit Default Restart
-nssm set imageproxy Start SERVICE_AUTO_START
+# Native crash recovery + auto-start, via built-in sc.exe:
+sc.exe failure imageproxy reset= 86400 actions= restart/5000/restart/5000/restart/5000
+sc.exe config  imageproxy start= auto
 
-nssm start imageproxy
-nssm status imageproxy
+& $exe -service start
+sc.exe query imageproxy          # or services.msc
 ```
-Update later with `nssm restart imageproxy`; remove with `nssm remove imageproxy confirm`.
+Manage it with `imageproxy.exe -service stop|start|restart|uninstall` (or the usual
+`sc.exe` / `services.msc`). The bundled **`build\install-service.ps1`** does all of the
+above from a CONFIG block — prefer it.
 
-> **Cache path on Windows:** both `C:/media/.../_imgcache` and `C:\media\...\_imgcache`
+> **Logs:** a service's stdout is discarded by Windows, so pass `-logFile` (as above) to
+> capture startup + errors. Start/stop/failure are also written to the Windows Event Log.
+
+> **Cache path on Windows:** both `D:/media/.../_imgcache` and `D:\media\...\_imgcache`
 > are accepted (verified). Forward slashes are slightly safer (the value passes through
 > Go's `url.Parse`). The cache directory is created on first use.
 
 > **Firewall:** binding to `127.0.0.1` already blocks external access. No inbound rule
-> is needed — only IIS on the same box connects to it.
+> is needed — only IIS on the same box connects to it. The service runs as LocalSystem
+> by default (can read `D:\media` and write the cache).
 
 ### 4b. Linux — via systemd
+> The binary can also self-install on Linux: `sudo imageproxy -service install -addr … -cache …`
+> writes a systemd unit automatically (same `-service` flag as Windows). The hand-written
+> unit below is preferred in production because it adds a dedicated user + hardening.
+
 Create a dedicated unprivileged user and a unit.
 
 ```bash
@@ -265,8 +279,8 @@ clear the imageproxy cache dir). New filenames need no purge.
 
 ```bash
 git pull                        # get new commits
-go build -ldflags "-s -w" -o imageproxy ./cmd/imageproxy   # rebuild
-# Windows: nssm restart imageproxy      Linux: sudo systemctl restart imageproxy
+go build -ldflags "-s -w" -o imageproxy ./cmd/imageproxy   # rebuild (Windows: build.ps1)
+# restart:  Windows: imageproxy.exe -service restart    Linux: sudo systemctl restart imageproxy
 ```
 To rebase the fork on a newer upstream, re-apply the small delta in
 [FORK_NOTES.md](FORK_NOTES.md).
@@ -283,6 +297,8 @@ To rebase the fork on a newer upstream, re-apply the small delta in
 | Slow first hit, fast after | Expected: the first request for a variant encodes then caches. Ensure `-cache` is set so it's paid once. AVIF is the heaviest; `q55`/speed keep it reasonable on ~1600 px originals. |
 | 504 / cut-off on huge images | 30 s write timeout hit by a very large AVIF encode. Keep originals ≤ ~1600 px (the CMS already downsizes uploads). |
 | Won't start: `listen failed` | Port already in use. Change `-addr` or free `:8080`. |
+| `-service install` fails / access denied | Must run in an **elevated** (Administrator) PowerShell. |
+| Service installed but keeps stopping | Check the `-logFile` and the Windows Event Log. Common causes: cache dir parent missing or not writable by LocalSystem, or `listen failed` (port in use). |
 
 Enable `-verbose` during bring-up to log every fetch/transform and the served-from-cache
-flag.
+flag. When running as a service, combine it with `-logFile` to capture that output.

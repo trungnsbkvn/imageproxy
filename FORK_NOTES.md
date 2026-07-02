@@ -36,10 +36,12 @@ Linux box optimizing purely for encode throughput.
 
 | File | Change |
 |------|--------|
-| `go.mod` | + `github.com/gen2brain/webp`, `github.com/gen2brain/avif` (libwebp/libaom via WASM/wazero — **no cgo**) |
+| `go.mod` | + `github.com/gen2brain/webp`, `github.com/gen2brain/avif` (libwebp/libaom via WASM/wazero — **no cgo**); + `github.com/kardianos/service` (pure-Go OS-service support) |
 | `data.go` | `webp`/`avif` registered as parseable `format` options (`optFormatWEBP`, `optFormatAVIF`) |
 | `transform.go` | `webp` + `avif` cases in the encode switch; `contentTypeForFormat()` helper; default qualities (WebP 80, AVIF 55, AVIF speed 8) |
 | `imageproxy.go` | replay path sets an explicit `Content-Type` for known output formats — **required for AVIF**, because Go's `http.DetectContentType` has no AVIF signature and would mislabel it `application/octet-stream` (→ 403 under the default `image/*` content-type filter) |
+| `cmd/imageproxy/service.go` *(new)* | native OS-service support: `-service install\|uninstall\|start\|stop\|restart` (Windows SCM / systemd / launchd, **no nssm**) + `-logFile`. Foreground behaviour unchanged. |
+| `cmd/imageproxy/main.go` | tail refactor: build the `http.Server`, then `runWithService(server)` instead of `server.Serve` directly (so it runs under a service manager or foreground). |
 
 Nothing else changes: URL scheme, HMAC signing (`s` option), `allowHosts`, caching,
 metrics, and all existing formats behave exactly as upstream.
